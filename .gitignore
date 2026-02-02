@@ -1,0 +1,13 @@
+.env
+
+# Ruby/Bundler
+vendor/bundle/
+.bundle/
+''/
+*.gem
+.ruby-version
+.ruby-gemset
+
+# IDE
+.vscode/
+.idea/
