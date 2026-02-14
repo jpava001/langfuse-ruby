@@ -1,6 +1,6 @@
 # Langfuse Ruby Integration with AWS Bedrock Claude
 
-A Ruby-based project demonstrating how to integrate [Langfuse](https://langfuse.com/) observability with AWS Bedrock's Claude models. This project provides examples of LLM tracing, monitoring, and evaluation using the Langfuse Ruby gem.
+A Ruby-based project demonstrating how to integrate [Langfuse](https://langfuse.com/) observability with AWS Bedrock's Claude models. This project provides examples of LLM tracing, monitoring, and evaluation using the [langfuse-rb gem](https://github.com/simplepractice/langfuse-rb).
 
 ## Installation
 
@@ -50,10 +50,11 @@ USD_PER_1K_OUTPUT_TOKENS=0.015
 │   ├── bedrock_claude.rb    # AWS Bedrock client wrapper
 │   └── config.rb             # Configuration management
 ├── scripts/
-│   ├── hello_world.rb        # Simple single-turn example
-│   ├── chat_conversation.rb  # Interactive chat with tracing
-│   ├── tool_call_addition.rb # Tool calling demonstration
-│   └── evaluate_grading.rb   # Evaluation framework example
+│   ├── hello_world.rb           # Simple single-turn example
+│   ├── chat_conversation.rb     # Interactive chat with tracing
+│   ├── tool_call_addition.rb    # Tool calling demonstration
+│   ├── evaluate_grading.rb      # Evaluation framework example
+│   └── simple_prompt_example.rb # Prompt management example
 ├── data/
 │   └── reading_comprehension_test_cases.json  # Test data
 ├── Gemfile                   # Ruby dependencies
@@ -67,7 +68,7 @@ USD_PER_1K_OUTPUT_TOKENS=0.015
 A simple example demonstrating basic Langfuse tracing with a single LLM call:
 
 ```bash
-ruby scripts/hello_world.rb
+bundle exec ruby scripts/hello_world.rb
 ```
 
 This script:
@@ -81,7 +82,7 @@ This script:
 An interactive chat application with full conversation tracing:
 
 ```bash
-ruby scripts/chat_conversation.rb
+bundle exec ruby scripts/chat_conversation.rb
 ```
 
 Features:
@@ -96,7 +97,7 @@ Features:
 Demonstrates Claude's tool calling capabilities with observability:
 
 ```bash
-ruby scripts/tool_call_addition.rb
+bundle exec ruby scripts/tool_call_addition.rb
 ```
 
 This example:
@@ -111,7 +112,7 @@ This example:
 An example of evaluating LLM performance on reading comprehension tasks:
 
 ```bash
-ruby scripts/evaluate_grading.rb
+bundle exec ruby scripts/evaluate_grading.rb
 ```
 
 This script:
@@ -120,6 +121,22 @@ This script:
 - Tracks evaluation metrics in Langfuse
 - Calculates accuracy and statistics
 - Simulates realistic token counts, latency, and costs
+
+### 5. Prompt Management Example
+
+Explore LangFuse's prompt management capabilities:
+
+```bash
+bundle exec ruby scripts/simple_prompt_example.rb
+```
+
+This script demonstrates:
+- Fetching prompts from LangFuse by name
+- Using prompts with variable substitution
+- Fetching specific prompt versions
+- Linking prompts to traces in LLM calls
+
+**Note:** You'll need to create prompts in the LangFuse UI first. Create a prompt named `greeting-assistant` with simple greeting text to test the basic example.
 
 ## Key Components
 
@@ -151,6 +168,7 @@ The `Config` module (`lib/config.rb`) manages:
 - **Usage Tracking**: Token counts and costs
 - **Session Management**: Multi-turn conversation tracking
 - **Evaluation**: Test case evaluation and metrics
+- **Prompt Management**: Fetching, versioning, and using managed prompts
 
 ## Development
 
@@ -165,9 +183,21 @@ OTEL_ENDPOINT=http://localhost:3000/api/public/otel/v1/traces
 
 If you encounter token limit errors, adjust `CHAT_MAX_TOKENS` in your `.env` file.
 
+## Key Features
+
+This project uses the [langfuse-rb gem](https://github.com/simplepractice/langfuse-rb) which provides:
+
+- **Built on OpenTelemetry**: Automatic context propagation and industry-standard tracing
+- **Block-based API**: Clean, Ruby-idiomatic `observe` blocks with automatic resource cleanup
+- **Context Management**: `propagate_attributes` for automatic trace-level attributes
+- **Prompt Management**: Centralized prompt versioning with Mustache templating
+- **Automatic Caching**: Redis or in-memory caching with stampede protection
+- **Generation Tracking**: Specialized observation type for LLM calls with token usage
+
 ## Resources
 
 - [Langfuse Documentation](https://langfuse.com/docs)
+- [langfuse-rb GitHub](https://github.com/simplepractice/langfuse-rb)
+- [langfuse-rb Documentation](https://github.com/simplepractice/langfuse-rb/tree/main/docs)
 - [AWS Bedrock Documentation](https://docs.aws.amazon.com/bedrock/)
 - [Claude API Documentation](https://docs.anthropic.com/)
-- [Langfuse Ruby Gem](https://github.com/langfuse/langfuse-ruby)

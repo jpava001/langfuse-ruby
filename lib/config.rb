@@ -17,16 +17,20 @@ module Config
     end
 
     def self.configure!
-      # Extract host from OTEL_ENDPOINT
+      # Extract base URL from OTEL_ENDPOINT
       # Example: http://localhost:3000/api/public/otel/v1/traces -> http://localhost:3000
-      langfuse_host = OTEL_ENDPOINT.sub(%r{/api/public/otel.*$}, "")
+      base_url = OTEL_ENDPOINT.sub(%r{/api/public/otel.*$}, "")
 
-      # Configure Langfuse
+      # Configure Langfuse (langfuse-rb gem)
       ::Langfuse.configure do |config|
         config.public_key = PUBLIC_KEY
         config.secret_key = SECRET_KEY
-        config.host = langfuse_host
+        config.base_url = base_url
       end
+
+      # Initialize OpenTelemetry tracing to export to Langfuse
+      require "langfuse/otel_setup"
+      ::Langfuse::OtelSetup.setup(::Langfuse.configuration)
     end
   end
 

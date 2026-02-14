@@ -19,80 +19,75 @@ puts "Type /exit to quit, /new to start a new session."
 puts "=" * 60
 puts
 
-trace = Langfuse.trace(
-  name: "Chat Conversation with Langfuse Gem",
+# Main conversation loop wrapped in propagate_attributes
+Langfuse.propagate_attributes(
   user_id: Config::Langfuse::USER_ID,
   session_id: Config::Langfuse.session_id,
-  metadata: {
-    environment: Config::Langfuse::ENVIRONMENT
-  },
-  input: messages
-)
+  metadata: { environment: Config::Langfuse::ENVIRONMENT }
+) do
+  loop do
+    print "You> "
+    user_input = STDIN.gets
+    break if user_input.nil?
 
-loop do
-  print "You> "
-  user_input = STDIN.gets
-  break if user_input.nil?
+    user_input = user_input.strip
+    next if user_input.empty?
 
-  user_input = user_input.strip
-  next if user_input.empty?
+    break if user_input == "/exit"
 
-  break if user_input == "/exit"
+    if user_input == "/new"
+      Config::Langfuse.reset_session!
+      messages = []
+      puts "\n" + "=" * 60
+      puts "New session started!"
+      puts "=" * 60
+      puts
+      next
+    end
 
-  if user_input == "/new"
-    Config::Langfuse.reset_session!
-    messages = []
-    puts "\n" + "=" * 60
-    puts "New session started!"
-    puts "=" * 60
-    puts
-    next
-  end
-
-  # Add user message to history
-  messages << {
-    "role"    => "user",
-    "content" => [{ "type" => "text", "text" => user_input }]
-  }
-
-  begin
-    # Create a trace for this turn
-    
-
-    result = bedrock.invoke(
-      model_id: Config::Bedrock::MODEL_ID,
-      messages: messages,
-      max_tokens: Config::Bedrock::MAX_TOKENS,
-      trace: trace
-    ) 
-
-    # Add assistant response to message history
+    # Add user message to history
     messages << {
-      "role"    => "assistant",
-      "content" => result.raw["content"]
+      "role"    => "user",
+      "content" => [{ "type" => "text", "text" => user_input }]
     }
 
-    # Display response
-    puts "Assistant> #{result.text}"
-    puts
+    begin
+      # Create an observation for this turn
+      Langfuse.observe("chat-turn", input: { message: user_input, history_length: messages.length }) do |obs|
+        result = bedrock.invoke(
+          model_id: Config::Bedrock::MODEL_ID,
+          messages: messages,
+          max_tokens: Config::Bedrock::MAX_TOKENS,
+          trace_generation: true
+        )
 
-  rescue StandardError => e
-    puts "Error: #{e.message}"
-    puts e.backtrace.first(5).join("\n")
-    puts
-  ensure
-    # Flush after each turn for real-time visibility
-    Langfuse.flush
+        # Add assistant response to message history
+        messages << {
+          "role"    => "assistant",
+          "content" => result.raw["content"]
+        }
+
+        # Update observation with the result
+        obs.update(output: { response: result.text, total_messages: messages.length })
+
+        # Display response
+        puts "Assistant> #{result.text}"
+        puts
+
+        result
+      end
+
+    rescue StandardError => e
+      puts "Error: #{e.message}"
+      puts e.backtrace.first(5).join("\n")
+      puts
+    end
   end
 end
 
-Langfuse.trace(
-  id: trace.id,
-  output: messages
-)
+# Force flush traces to Langfuse before script exits
+Langfuse::OtelSetup.force_flush
 
-# Final flush before exit
-Langfuse.flush
 puts "\n" + "=" * 60
 puts "Goodbye!"
 puts "=" * 60

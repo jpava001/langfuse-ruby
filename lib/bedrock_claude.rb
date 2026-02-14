@@ -15,7 +15,7 @@ class BedrockClaude
     @client = Aws::BedrockRuntime::Client.new(region: region)
   end
 
-  def invoke(model_id:, prompt_text: nil, messages: nil, tools: nil, max_tokens: 50, trace: nil)
+  def invoke(model_id:, prompt_text: nil, messages: nil, tools: nil, max_tokens: 50, langfuse_prompt: nil)
     # Build messages array based on input format
     messages_payload = if messages
                          messages.dup
@@ -30,17 +30,6 @@ class BedrockClaude
                          raise ArgumentError, "Either prompt_text or messages must be provided"
                        end
 
-    # Create Langfuse generation if trace is provided
-    generation = nil
-    if trace
-      generation = Langfuse.generation(
-        trace_id: trace.id,
-        name: "bedrock-generation",
-        model: model_id,
-        input: messages_payload
-      )
-    end
-
     # Build request body
     request_body = {
       anthropic_version: "bedrock-2023-05-31",
@@ -49,44 +38,52 @@ class BedrockClaude
     }
     request_body[:tools] = tools if tools
 
-    # Call AWS Bedrock
-    resp = @client.invoke_model(
-      model_id: model_id,
-      content_type: "application/json",
-      accept: "application/json",
-      body: request_body.to_json
-    )
+    # Wrap in Langfuse observation if tracing is enabled
+    Langfuse.observe("bedrock-generation", input: messages_payload, as_type: :generation) do |gen|
+      # Set model information
+      gen.model = model_id
+      
+      # Add prompt linking if prompt is provided
+      if langfuse_prompt
+        gen.update(prompt: {
+          name: langfuse_prompt.name,
+          version: langfuse_prompt.version
+        })
+      end
 
-    body = JSON.parse(resp.body.read.force_encoding('UTF-8'))
+      # Call AWS Bedrock
+      resp = @client.invoke_model(
+        model_id: model_id,
+        content_type: "application/json",
+        accept: "application/json",
+        body: request_body.to_json
+      )
 
-    usage = body["usage"] || {}
-    input_tokens = usage["input_tokens"].to_i
-    output_tokens = usage["output_tokens"].to_i
-    total_tokens = input_tokens + output_tokens
+      body = JSON.parse(resp.body.read.force_encoding('UTF-8'))
 
-    # Extract text from response
-    text = body.dig("content", 0, "text").to_s
+      usage = body["usage"] || {}
+      input_tokens = usage["input_tokens"].to_i
+      output_tokens = usage["output_tokens"].to_i
+      total_tokens = input_tokens + output_tokens
 
-    # Update Langfuse generation with output and usage
-    if trace && generation
-      Langfuse.generation(
-        id: generation.id,
-        trace_id: trace.id,
-        output: { "content" => body["content"] },
-        usage: {
-          input: input_tokens,
-          output: output_tokens,
-          total: total_tokens
-        }
+      # Extract text from response
+      text = body.dig("content", 0, "text").to_s
+
+      # Update generation with output and usage
+      gen.output = { "content" => body["content"] }
+      gen.usage = {
+        prompt_tokens: input_tokens,
+        completion_tokens: output_tokens,
+        total_tokens: total_tokens
+      }
+
+      Result.new(
+        text: text,
+        stop_reason: body["stop_reason"].to_s,
+        input_tokens: input_tokens,
+        output_tokens: output_tokens,
+        raw: body
       )
     end
-
-    Result.new(
-      text: text,
-      stop_reason: body["stop_reason"].to_s,
-      input_tokens: input_tokens,
-      output_tokens: output_tokens,
-      raw: body
-    )
   end
 end

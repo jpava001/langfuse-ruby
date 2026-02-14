@@ -21,150 +21,134 @@ exact_matches = 0
 grade_counts = Hash.new(0)
 
 begin
-  test_cases.each do |test_case|
-    # Extract fields
-    id = test_case["id"]
-    passage = test_case["passage"]
-    question = test_case["question"]
-    rubric = test_case["rubric"]
-    answer = test_case["answer"]
-    student_grade = test_case["student_grade"]
-    llm_scoring_output = test_case["llm_scoring_output"]
-    expected_score = test_case["expected_score"]
-    
-    # Get LLM score from output
-    llm_score = llm_scoring_output["total_score"]
-    
-    # Track statistics
-    exact_matches += 1 if llm_score == expected_score
-    grade_counts[student_grade] += 1
-    
-    # Build the input prompt (simulated LLM grading prompt)
-    input_prompt = <<~PROMPT
-      You are an expert educational assessor grading a reading comprehension answer.
+  # Wrap all evaluations in a session context
+  Langfuse.propagate_attributes(
+    user_id: Config::Langfuse::USER_ID,
+    session_id: Config::Langfuse.session_id,
+    metadata: { environment: Config::Langfuse::ENVIRONMENT }
+  ) do
+    test_cases.each do |test_case|
+      # Extract fields
+      id = test_case["id"]
+      passage = test_case["passage"]
+      question = test_case["question"]
+      rubric = test_case["rubric"]
+      answer = test_case["answer"]
+      student_grade = test_case["student_grade"]
+      llm_scoring_output = test_case["llm_scoring_output"]
+      expected_score = test_case["expected_score"]
       
-      PASSAGE:
-      #{passage}
+      # Get LLM score from output
+      llm_score = llm_scoring_output["total_score"]
       
-      QUESTION:
-      #{question}
+      # Track statistics
+      exact_matches += 1 if llm_score == expected_score
+      grade_counts[student_grade] += 1
       
-      RUBRIC:
-      #{rubric}
-      
-      STUDENT'S ANSWER:
-      #{answer}
-      
-      INSTRUCTIONS:
-      Evaluate the student's answer against each criterion in the rubric. The rubric specifies what earns 0, 1, or 2 points for each criterion.
-      
-      For each criterion:
-      1. Determine which level (0, 1, or 2 points) best matches the student's answer
-      2. Provide a brief explanation for your decision
-      
-      After evaluating all criteria, sum the points to calculate the total score.
-      
-      Provide your evaluation in the following JSON format:
-      {
-        "criterion_1_score": <0, 1, or 2>,
-        "criterion_1_reasoning": "<brief explanation>",
-        "criterion_2_score": <0, 1, or 2>,
-        "criterion_2_reasoning": "<brief explanation>",
-        "criterion_3_score": <0, 1, or 2>,
-        "criterion_3_reasoning": "<brief explanation>",
-        "total_score": <sum of all criterion scores>,
-        "overall_feedback": "<optional 1-2 sentence summary>"
-      }
-    PROMPT
-    
-    # Prepare input for both trace and generation
-    trace_generation_input = {
-      "messages" => [
+      # Build the input prompt (simulated LLM grading prompt)
+      input_prompt = <<~PROMPT
+        You are an expert educational assessor grading a reading comprehension answer.
+        
+        PASSAGE:
+        #{passage}
+        
+        QUESTION:
+        #{question}
+        
+        RUBRIC:
+        #{rubric}
+        
+        STUDENT'S ANSWER:
+        #{answer}
+        
+        INSTRUCTIONS:
+        Evaluate the student's answer against each criterion in the rubric. The rubric specifies what earns 0, 1, or 2 points for each criterion.
+        
+        For each criterion:
+        1. Determine which level (0, 1, or 2 points) best matches the student's answer
+        2. Provide a brief explanation for your decision
+        
+        After evaluating all criteria, sum the points to calculate the total score.
+        
+        Provide your evaluation in the following JSON format:
         {
-          "role" => "user",
-          "content" => input_prompt
+          "criterion_1_score": <0, 1, or 2>,
+          "criterion_1_reasoning": "<brief explanation>",
+          "criterion_2_score": <0, 1, or 2>,
+          "criterion_2_reasoning": "<brief explanation>",
+          "criterion_3_score": <0, 1, or 2>,
+          "criterion_3_reasoning": "<brief explanation>",
+          "total_score": <sum of all criterion scores>,
+          "overall_feedback": "<optional 1-2 sentence summary>"
         }
-      ]
-    }
-    
-    # Prepare metadata for both trace and generation
-    shared_metadata = {
-      environment: Config::Langfuse::ENVIRONMENT,
-      student_grade: student_grade,
-      expected_score: expected_score
-    }
-    
-    # Simulate token counts based on content length
-    # Rough estimate: ~4 characters per token
-    input_text = input_prompt
-    output_text = llm_scoring_output.to_json
-    input_tokens = (input_text.length / 4.0).round
-    output_tokens = (output_text.length / 4.0).round
-    total_tokens = input_tokens + output_tokens
-    
-    # Simulate latency (1000ms to 4000ms, varies by complexity)
-    # Longer passages and more complex answers take more time
-    # Ensure minimum latency of 1 second
-    base_latency = 1200
-    complexity_factor = (input_tokens / 80.0) + (output_tokens / 40.0)
-    simulated_latency_ms = (base_latency + (complexity_factor * 150) + rand(300..800)).round
-    simulated_latency_seconds = simulated_latency_ms / 1000.0
-    
-    # Simulate cost (using typical Claude pricing: $3/1M input, $15/1M output tokens)
-    input_cost = (input_tokens / 1_000_000.0) * 3.0
-    output_cost = (output_tokens / 1_000_000.0) * 15.0
-    total_cost = input_cost + output_cost
-    
-    # Calculate start and end times for latency simulation
-    end_time = Time.now
-    start_time = end_time - simulated_latency_seconds
-    
-    # Create Langfuse trace with timing
-    trace = Langfuse.trace(
-      name: "Reading Comprehension Grading",
-      user_id: Config::Langfuse::USER_ID,
-      session_id: Config::Langfuse.session_id,
-      metadata: shared_metadata,
-      input: trace_generation_input,
-      timestamp: start_time
-    )
-    
-    # Create generation observation (simulated LLM grading call)
-    generation = Langfuse.generation(
-      trace_id: trace.id,
-      name: "grading-llm-call",
-      model: "simulated-grader",
-      input: trace_generation_input,
-      metadata: shared_metadata,
-      start_time: start_time,
-      end_time: end_time
-    )
-    
-    # Update generation with output, usage, and cost
-    Langfuse.generation(
-      id: generation.id,
-      trace_id: trace.id,
-      output: llm_scoring_output,
-      usage: {
-        input: input_tokens,
-        output: output_tokens,
-        total: total_tokens,
-        unit: "TOKENS",
-        input_cost: input_cost,
-        output_cost: output_cost,
-        total_cost: total_cost
+      PROMPT
+      
+      # Prepare input for generation
+      trace_generation_input = {
+        "messages" => [
+          {
+            "role" => "user",
+            "content" => input_prompt
+          }
+        ]
       }
-    )
-    
-    # Update trace with output and timing (same as generation)
-    Langfuse.trace(
-      id: trace.id,
-      output: llm_scoring_output
-    )
-    
-    # Print summary for this test case
-    match_indicator = llm_score == expected_score ? " ✓" : ""
-    puts "[#{id}] Grade: #{student_grade} | LLM: #{llm_score}/6 | Expected: #{expected_score}/6#{match_indicator}"
+      
+      # Prepare metadata
+      shared_metadata = {
+        student_grade: student_grade,
+        expected_score: expected_score
+      }
+      
+      # Simulate token counts based on content length
+      input_text = input_prompt
+      output_text = llm_scoring_output.to_json
+      input_tokens = (input_text.length / 4.0).round
+      output_tokens = (output_text.length / 4.0).round
+      total_tokens = input_tokens + output_tokens
+      
+      # Simulate latency
+      base_latency = 1200
+      complexity_factor = (input_tokens / 80.0) + (output_tokens / 40.0)
+      simulated_latency_ms = (base_latency + (complexity_factor * 150) + rand(300..800)).round
+      simulated_latency_seconds = simulated_latency_ms / 1000.0
+      
+      # Simulate cost (using typical Claude pricing: $3/1M input, $15/1M output tokens)
+      input_cost = (input_tokens / 1_000_000.0) * 3.0
+      output_cost = (output_tokens / 1_000_000.0) * 15.0
+      total_cost = input_cost + output_cost
+      
+      # Create an observation for this grading task
+      Langfuse.observe(
+        "reading-comprehension-grading",
+        input: trace_generation_input,
+        metadata: shared_metadata
+      ) do |obs|
+        # Simulate the grading generation
+        # Note: The new gem doesn't support manual timestamps in the same way
+        # We'll create the generation observation and simulate latency with sleep
+        sleep(simulated_latency_seconds) if simulated_latency_seconds < 1 # Only sleep if < 1 second to keep tests fast
+        
+        obs.start_observation("grading-llm-call", input: trace_generation_input, as_type: :generation) do |gen|
+          gen.model = "simulated-grader"
+          gen.metadata = shared_metadata
+          gen.output = llm_scoring_output
+          gen.usage = {
+            prompt_tokens: input_tokens,
+            completion_tokens: output_tokens,
+            total_tokens: total_tokens
+          }
+          
+          llm_scoring_output
+        end
+        
+        # Update observation with output
+        obs.update(output: llm_scoring_output)
+      end
+      
+      # Print summary for this test case
+      match_indicator = llm_score == expected_score ? " ✓" : ""
+      puts "[#{id}] Grade: #{student_grade} | LLM: #{llm_score}/6 | Expected: #{expected_score}/6#{match_indicator}"
+    end
   end
   
   # Print summary statistics
@@ -184,9 +168,8 @@ rescue StandardError => e
   puts e.backtrace.join("\n")
   raise
 ensure
-  # Flush events to Langfuse
-  puts
-  puts "Flushing events to Langfuse..."
-  Langfuse.flush
-  puts "Done!"
+  # Force flush traces to Langfuse before script exits
+  Langfuse::OtelSetup.force_flush
 end
+
+puts "\nDone!"
