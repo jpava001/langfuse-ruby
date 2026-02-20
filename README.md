@@ -50,11 +50,12 @@ USD_PER_1K_OUTPUT_TOKENS=0.015
 │   ├── bedrock_claude.rb    # AWS Bedrock client wrapper
 │   └── config.rb             # Configuration management
 ├── scripts/
-│   ├── hello_world.rb           # Simple single-turn example
-│   ├── chat_conversation.rb     # Interactive chat with tracing
-│   ├── tool_call_addition.rb    # Tool calling demonstration
-│   ├── evaluate_grading.rb      # Evaluation framework example
-│   └── simple_prompt_example.rb # Prompt management example
+│   ├── hello_world.rb                 # Simple single-turn example
+│   ├── chat_conversation.rb           # Interactive chat with tracing
+│   ├── tool_call_addition.rb          # Tool calling demonstration
+│   ├── evaluate_grading.rb            # Evaluation framework example
+│   ├── evaluate_with_prompt_api.rb    # Evaluation using Langfuse prompts
+│   └── simple_prompt_example.rb       # Prompt management example
 ├── data/
 │   └── reading_comprehension_test_cases.json  # Test data
 ├── Gemfile                   # Ruby dependencies
@@ -122,7 +123,24 @@ This script:
 - Calculates accuracy and statistics
 - Simulates realistic token counts, latency, and costs
 
-### 5. Prompt Management Example
+### 5. Evaluation with Prompt API
+
+Run evaluations using prompts fetched from Langfuse:
+
+```bash
+bundle exec ruby scripts/evaluate_with_prompt_api.rb
+```
+
+This script demonstrates:
+- Fetching prompts from Langfuse API by name and label
+- Compiling prompts with Mustache variables
+- Running test cases with API-managed prompts
+- Linking prompts to generations for version tracking
+- Pushing simulated responses to Langfuse
+
+**Note:** You'll need to create a prompt named `assignment-feedback` with label `latest` in the Langfuse UI first. See [docs/EVALUATE_WITH_PROMPT_API.md](docs/EVALUATE_WITH_PROMPT_API.md) for detailed setup instructions.
+
+### 6. Prompt Management Example
 
 Explore LangFuse's prompt management capabilities:
 

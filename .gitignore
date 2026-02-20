@@ -11,3 +11,5 @@ vendor/bundle/
 # IDE
 .vscode/
 .idea/
+
+.DS_Store
